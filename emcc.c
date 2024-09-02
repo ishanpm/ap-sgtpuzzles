@@ -100,6 +100,8 @@ extern bool js_savefile_read(void *buf, int len);
 extern void js_save_prefs(const char *);
 extern void js_load_prefs(midend *);
 
+extern void js_update_status(int status);
+
 /*
  * These functions are called from JavaScript, so their prototypes
  * need to be kept in sync with emccpre.js.
@@ -276,6 +278,7 @@ static void post_move(void)
     js_enable_undo_redo(midend_can_undo(me), midend_can_redo(me));
     js_update_key_labels(midend_current_key_label(me, CURSOR_SELECT2),
                          midend_current_key_label(me, CURSOR_SELECT));
+    js_update_status(midend_status(me));
 }
 
 /*

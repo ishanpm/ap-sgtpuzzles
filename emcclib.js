@@ -22,6 +22,7 @@ mergeInto(LibraryManager.library, {
      * Called at the start of main() to set up event handlers.
      */
     js_init_puzzle: function() {
+        sendMessage("js_init_puzzle");
         initPuzzle();
     },
     /*
@@ -31,6 +32,7 @@ mergeInto(LibraryManager.library, {
      * started.
      */
     js_post_init: function() {
+        sendMessage("js_post_init");
         post_init();
     },
     /*
@@ -51,7 +53,8 @@ mergeInto(LibraryManager.library, {
      * in a configuration dialog).
      */
     js_error_box: function(ptr) {
-        alert(UTF8ToString(ptr));
+        sendMessage("js_error_box", UTF8ToString(ptr));
+        //alert(UTF8ToString(ptr));
     },
 
     /*
@@ -62,6 +65,7 @@ mergeInto(LibraryManager.library, {
      * provides neither presets nor configurability.
      */
     js_remove_type_dropdown: function() {
+        sendMessage("js_remove_type_dropdown");
         if (gametypelist === null) return;
         var gametypeitem = gametypelist.closest("li");
         if (gametypeitem === null) return;
@@ -76,6 +80,7 @@ mergeInto(LibraryManager.library, {
      * time if the game doesn't support an in-game solve function.
      */
     js_remove_solve_button: function() {
+        sendMessage("js_remove_solve_button");
         if (solve_button === null) return;
         var solve_item = solve_button.closest("li");
         if (solve_item === null) return;
@@ -93,6 +98,7 @@ mergeInto(LibraryManager.library, {
      * clicked.
      */
     js_add_preset: function(menuid, ptr, value) {
+        sendMessage("js_add_preset", menuid, UTF8ToString(ptr), value);
         var name = UTF8ToString(ptr);
         var item = document.createElement("li");
         var label = document.createElement("label");
@@ -121,6 +127,7 @@ mergeInto(LibraryManager.library, {
      * js_add_preset or this function.
      */
     js_add_preset_submenu: function(menuid, ptr, value) {
+        sendMessage("js_add_preset_submenu", menuid, UTF8ToString(ptr), value);
         var name = UTF8ToString(ptr);
         var item = document.createElement("li");
         // We still create a transparent tick element, even though it
@@ -159,6 +166,7 @@ mergeInto(LibraryManager.library, {
      * which turn out to exactly match a preset).
      */
     js_select_preset: function(n) {
+        sendMessage("js_select_preset", n);
         menuform.elements["preset"].value = n;
     },
 
@@ -187,9 +195,11 @@ mergeInto(LibraryManager.library, {
      */
     js_set_colour: function(colour_number, colour_string) {
         colours[colour_number] = UTF8ToString(colour_string);
-        if (colour_number == 0)
+        if (colour_number == 0) {
+            setBackgroundColor(colours[colour_number]);
             document.documentElement.style.setProperty("--puzzle-background",
                                                        colours[colour_number]);
+        }
     },
 
     /*
@@ -214,6 +224,7 @@ mergeInto(LibraryManager.library, {
      * the random seed permalink.
      */
     js_update_permalinks: function(desc, seed) {
+        sendMessage("js_update_permalinks", UTF8ToString(desc), UTF8ToString(seed));
         desc = encodeURI(UTF8ToString(desc)).replace(/#/g, "%23");
         if (permalink_desc !== null)
             permalink_desc.href = "#" + desc;
@@ -236,6 +247,7 @@ mergeInto(LibraryManager.library, {
      * after a move.
      */
     js_enable_undo_redo: function(undo, redo) {
+        sendMessage("js_enable_undo_redo", undo, redo);
         disable_menu_item(undo_button, (undo == 0));
         disable_menu_item(redo_button, (redo == 0));
     },
@@ -246,6 +258,7 @@ mergeInto(LibraryManager.library, {
      * Update any labels for the SoftLeft and Enter keys.
      */
     js_update_key_labels: function(lsk_ptr, csk_ptr) {
+        sendMessage("js_update_key_labels", UTF8ToString(lsk_ptr), UTF8ToString(csk_ptr));
         var elem;
         var lsk_text = UTF8ToString(lsk_ptr);
         var csk_text = UTF8ToString(csk_ptr);
@@ -587,6 +600,7 @@ mergeInto(LibraryManager.library, {
      * puzzle back end turns out not to want one.
      */
     js_canvas_remove_statusbar: function() {
+        sendMessage("js_canvas_remove_statusbar");
         if (statusbar !== null)
             statusbar.parentNode.removeChild(statusbar);
         statusbar = null;
@@ -598,6 +612,7 @@ mergeInto(LibraryManager.library, {
      * Set the text in the status bar.
      */
     js_canvas_set_statusbar: function(ptr) {
+        sendMessage("js_canvas_set_statusbar", UTF8ToString(ptr));
         statusbar.textContent = UTF8ToString(ptr);
     },
 
@@ -630,6 +645,7 @@ mergeInto(LibraryManager.library, {
      * because the device pixel ratio has changed.
      */
     js_canvas_set_size: function(w, h) {
+        sendMessage("js_canvas_set_size", w, h);
         onscreen_canvas.width = w;
         offscreen_canvas.width = w;
         if (resizable_div !== null)
@@ -662,6 +678,7 @@ mergeInto(LibraryManager.library, {
      * overlay on top of the rest of the puzzle web page.
      */
     js_dialog_init: function(titletext) {
+        sendMessage("js_dialog_init", UTF8ToString(titletext));
         dialog_init(UTF8ToString(titletext));
     },
 
@@ -672,6 +689,7 @@ mergeInto(LibraryManager.library, {
      * construction.
      */
     js_dialog_string: function(index, title, initialtext) {
+        sendMessage("js_dialog_string", index, UTF8ToString(title), UTF8ToString(initialtext));
         var label = document.createElement("label");
         label.textContent = UTF8ToString(title);
         dlg_form.appendChild(label);
@@ -697,6 +715,7 @@ mergeInto(LibraryManager.library, {
      * gives the separator.
      */
     js_dialog_choices: function(index, title, choicelist, initvalue) {
+        sendMessage("js_dialog_choices", index, UTF8ToString(title), UTF8ToString(choicelist), initvalue);
         var label = document.createElement("label");
         label.textContent = UTF8ToString(title);
         dlg_form.appendChild(label);
@@ -738,6 +757,7 @@ mergeInto(LibraryManager.library, {
      * the label can refer to it).
      */
     js_dialog_boolean: function(index, title, initvalue) {
+        sendMessage("js_dialog_boolean", index, UTF8ToString(title), initvalue);
         var checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = (initvalue != 0);
@@ -759,6 +779,7 @@ mergeInto(LibraryManager.library, {
      * everything else on the page.
      */
     js_dialog_launch: function() {
+        sendMessage("js_dialog_launch");
         dialog_launch(function(event) {
             for (var i in dlg_return_funcs)
                 dlg_return_funcs[i]();
@@ -775,6 +796,7 @@ mergeInto(LibraryManager.library, {
      * associated with it.
      */
     js_dialog_cleanup: function() {
+        sendMessage("js_dialog_cleanup");
         dialog_cleanup();
     },
 
@@ -786,6 +808,7 @@ mergeInto(LibraryManager.library, {
      * effect of taking focus away from the canvas.
      */
     js_focus_canvas: function() {
+        sendMessage("js_focus_canvas");
         onscreen_canvas.focus();
     },
 
@@ -795,6 +818,7 @@ mergeInto(LibraryManager.library, {
      * Read len bytes from the save file that we're currently loading.
      */
     js_savefile_read: function(buf, len) {
+        // TODO figure this out
         return savefile_read_callback(buf, len);
     },
 
@@ -804,6 +828,7 @@ mergeInto(LibraryManager.library, {
      * Write a buffer of serialised preferences data into localStorage.
      */
     js_save_prefs: function(buf) {
+        // TODO figure this out
         var prefsdata = UTF8ToString(buf);
         try {
             localStorage.setItem(location.pathname + " preferences", prefsdata);
@@ -821,6 +846,7 @@ mergeInto(LibraryManager.library, {
      * pass it back in as a string, via prefs_load_callback.
      */
     js_load_prefs: function(me) {
+        // TODO figure this out
         function load_prefs_from_string(prefsdata) {
             if (prefsdata !== undefined && prefsdata !== null) {
                 var lenbytes = lengthBytesUTF8(prefsdata) + 1;
@@ -845,5 +871,9 @@ mergeInto(LibraryManager.library, {
             // absent.
             console.warn(error);
         }
+    },
+
+    js_update_status: function(status) {
+        sendMessage("js_update_status", status)
     }
 });

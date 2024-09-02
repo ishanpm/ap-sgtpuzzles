@@ -155,3 +155,24 @@ include/
 /unfinished/sokoban
 /unfinished/*.exe
 /*.desktop
+
+# Ignore generated binaries
+/fuzzpuzz
+/galaxieseditor
+/gamelist.txt
+/auxiliary/combi-test
+/auxiliary/divvy-test
+/auxiliary/hat-test
+/auxiliary/hatgen
+/auxiliary/latin-test
+/auxiliary/matching
+/auxiliary/obfusc
+/auxiliary/penrose-legacy-test
+/auxiliary/penrose-test
+/auxiliary/sort-test
+/auxiliary/spectre-gen
+/auxiliary/spectre-test
+/auxiliary/tree234-test
+/auxiliary/*.exe
+
+build-emscripten/**

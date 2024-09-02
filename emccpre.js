@@ -99,7 +99,7 @@ var Module = {
     },
     // Pass argv[1] as the fragment identifier (so that permalinks of
     // the form puzzle.html#game-id can launch the specified id).
-    'arguments': [decodeURIComponent(location.hash)],
+    'arguments': ["#"+puzzleId],
     'noExitRuntime': true
 };
 
@@ -290,7 +290,7 @@ function dialog_launch(ok_function, cancel_function) {
 
     document.body.appendChild(dlg_dimmer);
     document.body.appendChild(dlg_form);
-    dlg_form.querySelector("input,select,a").focus();
+    //dlg_form.querySelector("input,select,a").focus();
 }
 
 function dialog_cleanup() {
@@ -392,6 +392,9 @@ function initPuzzle() {
     var key = Module.cwrap('key', 'boolean', ['number', 'string', 'string',
                                               'number', 'number', 'number']);
     onscreen_canvas.onkeydown = function(event) {
+        if (disableNewGame && (event.key == "n" || event.key == "N")) {
+            return;
+        }
         if (key(event.keyCode, event.key, event.char, event.location,
                 event.shiftKey ? 1 : 0, event.ctrlKey ? 1 : 0))
             event.preventDefault();
