@@ -809,7 +809,6 @@ mergeInto(LibraryManager.library, {
      */
     js_focus_canvas: function() {
         sendMessage("js_focus_canvas");
-        onscreen_canvas.focus();
     },
 
     /*

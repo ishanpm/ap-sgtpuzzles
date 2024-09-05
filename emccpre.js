@@ -297,7 +297,7 @@ function dialog_cleanup() {
     document.body.removeChild(dlg_dimmer);
     document.body.removeChild(dlg_form);
     dlg_dimmer = dlg_form = null;
-    onscreen_canvas.focus();
+    //onscreen_canvas.focus();
 }
 
 function set_capture(element, event) {
@@ -499,7 +499,7 @@ function initPuzzle() {
                 }
             });
             input.click();
-            onscreen_canvas.focus();
+            //onscreen_canvas.focus();
         }
     };
 
@@ -833,5 +833,5 @@ function post_init() {
     document.getElementById("puzzle").style.display = "";
 
     // Default to giving keyboard focus to the puzzle.
-    onscreen_canvas.focus();
+    //onscreen_canvas.focus();
 }
