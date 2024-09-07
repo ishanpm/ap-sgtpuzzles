@@ -158,6 +158,9 @@ var gametypesubmenus = [gametypelist];
 // C entry point for miscellaneous events.
 var command;
 
+var get_save_file, free_save_file
+var load_game
+
 // The <form> encapsulating the menus.  Used by
 // js_get_selected_preset() and js_select_preset().
 var menuform = document.getElementById("gamemenu");
@@ -444,9 +447,9 @@ function initPuzzle() {
     };
 
     // 'number' is used for C pointers
-    var get_save_file = Module.cwrap('get_save_file', 'number', []);
-    var free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
-    var load_game = Module.cwrap('load_game', 'void', []);
+    get_save_file = Module.cwrap('get_save_file', 'number', []);
+    free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
+    load_game = Module.cwrap('load_game', 'void', []);
 
     if (save_button) save_button.onclick = function(event) {
         if (dlg_dimmer === null) {

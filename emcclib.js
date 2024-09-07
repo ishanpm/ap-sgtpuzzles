@@ -830,7 +830,7 @@ mergeInto(LibraryManager.library, {
         // TODO figure this out
         var prefsdata = UTF8ToString(buf);
         try {
-            localStorage.setItem(location.pathname + " preferences", prefsdata);
+            localStorage.setItem(genre + " preferences", prefsdata);
         } catch (error) {
             // Tell the user their preferences have not been saved.
             console.error(error);
@@ -864,7 +864,7 @@ mergeInto(LibraryManager.library, {
         // Load saved preferences if they exist.
         try {
             load_prefs_from_string(
-                localStorage.getItem(location.pathname + " preferences"));
+                localStorage.getItem(genre + " preferences"));
         } catch (error) {
             // Log the error but otherwise pretend the settings were
             // absent.
