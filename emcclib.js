@@ -817,7 +817,6 @@ mergeInto(LibraryManager.library, {
      * Read len bytes from the save file that we're currently loading.
      */
     js_savefile_read: function(buf, len) {
-        // TODO figure this out
         return savefile_read_callback(buf, len);
     },
 
@@ -827,7 +826,6 @@ mergeInto(LibraryManager.library, {
      * Write a buffer of serialised preferences data into localStorage.
      */
     js_save_prefs: function(buf) {
-        // TODO figure this out
         var prefsdata = UTF8ToString(buf);
         try {
             localStorage.setItem(genre + " preferences", prefsdata);
