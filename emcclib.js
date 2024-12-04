@@ -127,7 +127,6 @@ mergeInto(LibraryManager.library, {
      * js_add_preset or this function.
      */
     js_add_preset_submenu: function(menuid, ptr, value) {
-        sendMessage("js_add_preset_submenu", menuid, UTF8ToString(ptr), value);
         var name = UTF8ToString(ptr);
         var item = document.createElement("li");
         // We still create a transparent tick element, even though it
@@ -145,6 +144,7 @@ mergeInto(LibraryManager.library, {
         gametypesubmenus[menuid].appendChild(item);
         var toret = gametypesubmenus.length;
         gametypesubmenus.push(submenu);
+        sendMessage("js_add_preset_submenu", menuid, UTF8ToString(ptr), toret);
         return toret;
     },
 
