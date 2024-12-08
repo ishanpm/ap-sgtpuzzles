@@ -2190,12 +2190,7 @@ static void game_get_cursor_location(const game_ui *ui,
 
 static int game_status(const game_state *state)
 {
-    /*
-     * We never report the game as lost, on the grounds that if the
-     * player has died they're quite likely to want to undo and carry
-     * on.
-     */
-    return state->gems == 0 ? +1 : 0;
+    return state->dead ? -1 : (state->gems == 0 ? +1 : 0);
 }
 
 #ifdef COMBINED
