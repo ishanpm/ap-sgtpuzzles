@@ -321,13 +321,32 @@ function initPuzzle() {
 
     // Stop right-clicks on the puzzle from popping up a context menu.
     // We need those right-clicks!
-    onscreen_canvas.oncontextmenu = function(event) { return false; }
+    onscreen_canvas.oncontextmenu = function(event) {
+        if (touchEmulationActive && !touchEmulationDown) {
+            touchEmulationButton = 2;
+            touchEmulationDown = true;
+            var xy = canvas_mouse_coords(event, onscreen_canvas);
+            mousedown(xy.x, xy.y, touchEmulationButton)
+        }
+        return false;
+    }
 
     // Set up mouse handlers. We do a bit of tracking of the currently
     // pressed mouse buttons, to avoid sending mousemoves with no
     // button down (our puzzles don't want those events).
     var mousedown = Module.cwrap('mousedown', 'boolean',
                                  ['number', 'number', 'number']);
+    var mousemove = Module.cwrap('mousemove', 'boolean',
+                                 ['number', 'number', 'number']);
+    var mouseup = Module.cwrap('mouseup', 'boolean',
+                               ['number', 'number', 'number']);
+    
+    var touchEmulationDown = false;
+    var touchEmulationActive = false;
+    var touchEmulationButton = 0;
+    var touchEmulationStartPos = {x: 0, y: 0};
+    var touchEmulationStartScreenPos = {x: 0, y: 0};
+    const touchEmulationDragThreshold = 10;
 
     var button_phys2log = [null, null, null];
     var buttons_down = function() {
@@ -338,53 +357,108 @@ function initPuzzle() {
         return toret;
     };
 
-    onscreen_canvas.onpointerdown = function(event) {
-        // Arrange that all mouse (and pointer) events are sent to
-        // this element until all buttons are released.  We can assume
-        // that if we managed to receive a pointerdown event,
-        // Element.setPointerCapture() is available.
-        onscreen_canvas.setPointerCapture(event.pointerId);
-    }
-    onscreen_canvas.onmousedown = function(event) {
+    // Capture everything except pinch zoom events
+    onscreen_canvas.style.touchAction = "pinch-zoom"
+
+    onscreen_canvas.onpointerdown = function (event) {
+        console.log(event)
+        if (!event.isPrimary) {
+            return;
+        }
+
         if (event.button >= 3)
             return;
+
+        onscreen_canvas.setPointerCapture(event.pointerId)
 
         var xy = canvas_mouse_coords(event, onscreen_canvas);
-        var logbutton = event.button;
-        if (event.shiftKey)
-            logbutton = 1;   // Shift-click overrides to middle button
-        else if (event.ctrlKey)
-            logbutton = 2;   // Ctrl-click overrides to right button
 
-        if (mousedown(xy.x, xy.y, logbutton))
-            event.preventDefault();
-        button_phys2log[event.button] = logbutton;
+        touchEmulationActive = event.button == 0 && event.pointerType.includes("touch");
+        if (touchEmulationActive) {
+            // Wait for possible long press (via oncontextmenu)
+            touchEmulationButton = 0;
+            touchEmulationDown = false;
+            touchEmulationStartPos = xy;
+            touchEmulationStartScreenPos = {x: event.screenX, y: event.screenY}
+        } else {
+            var logbutton = event.button;
+            if (event.shiftKey)
+                logbutton = 1;   // Shift-click overrides to middle button
+            else if (event.ctrlKey)
+                logbutton = 2;   // Ctrl-click overrides to right button
 
-        set_capture(onscreen_canvas, event);
-    };
-    var mousemove = Module.cwrap('mousemove', 'boolean',
-                                 ['number', 'number', 'number']);
-    onscreen_canvas.onmousemove = function(event) {
-        var down = buttons_down();
-        if (down) {
-            var xy = canvas_mouse_coords(event, onscreen_canvas);
-            if (mousemove(xy.x, xy.y, down))
+            if (mousedown(xy.x, xy.y, logbutton))
                 event.preventDefault();
+            button_phys2log[event.button] = logbutton;
         }
     };
-    var mouseup = Module.cwrap('mouseup', 'boolean',
-                               ['number', 'number', 'number']);
-    onscreen_canvas.onmouseup = function(event) {
+    onscreen_canvas.onpointermove = function (event) {
+        if (!event.isPrimary) {
+            return false;
+        }
+
+        if (touchEmulationActive) {
+            event.preventDefault();
+
+            if (!touchEmulationDown) {
+                // Check if movement exceeds threshold
+                var dx = event.screenX - touchEmulationStartScreenPos.x
+                var dy = event.screenY - touchEmulationStartScreenPos.y
+                const thresholdSquared = touchEmulationDragThreshold*touchEmulationDragThreshold;
+                if (dx*dx + dy*dy >= thresholdSquared) {
+                    touchEmulationDown = true;
+                    // Send a mousedown if we haven't yet
+                    mousedown(touchEmulationStartPos.x, touchEmulationStartPos.y, touchEmulationButton)
+                }
+            }
+            if (touchEmulationDown) {
+                var xy = canvas_mouse_coords(event, onscreen_canvas);
+                mousemove(xy.x, xy.y, 1 << touchEmulationButton)
+            }
+        } else {
+            var down = buttons_down();
+            if (down) {
+                var xy = canvas_mouse_coords(event, onscreen_canvas);
+                if (mousemove(xy.x, xy.y, down))
+                    event.preventDefault();
+            }
+        }
+    };
+    onscreen_canvas.onpointerup = function (event) {
+        if (!event.isPrimary) {
+            return;
+        }
+
         if (event.button >= 3)
             return;
 
-        if (button_phys2log[event.button] !== null) {
+        if (touchEmulationActive) {
             var xy = canvas_mouse_coords(event, onscreen_canvas);
-            if (mouseup(xy.x, xy.y, button_phys2log[event.button]))
+            if (!touchEmulationDown) {
+                // Send a mousedown if we haven't yet
+                mousedown(xy.x, xy.y, touchEmulationButton)
+            }
+            if (mouseup(xy.x, xy.y, touchEmulationButton))
                 event.preventDefault();
-            button_phys2log[event.button] = null;
+            touchEmulationDown = false;
+            touchEmulationActive = false;
+        } else {
+            if (button_phys2log[event.button] !== null) {
+                var xy = canvas_mouse_coords(event, onscreen_canvas);
+                if (mouseup(xy.x, xy.y, button_phys2log[event.button]))
+                    event.preventDefault();
+                button_phys2log[event.button] = null;
+            }
         }
     };
+    onscreen_canvas.onpointercancel = function (event) {
+        if (!touchEmulationDown) {
+            // Send a mouseup if we have to
+            mouseup(touchEmulationStartPos.x, touchEmulationStartPos.y, touchEmulationButton)
+        }
+        touchEmulationDown = false;
+        touchEmulationActive = false;
+    }
 
     // Set up keyboard handlers. We call event.preventDefault()
     // in the keydown handler if it looks like we might have
