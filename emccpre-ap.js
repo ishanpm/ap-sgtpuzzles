@@ -361,7 +361,6 @@ function initPuzzle() {
     onscreen_canvas.style.touchAction = "pinch-zoom"
 
     onscreen_canvas.onpointerdown = function (event) {
-        console.log(event)
         if (!event.isPrimary) {
             return;
         }
