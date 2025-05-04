@@ -1,0 +1,3 @@
+[submodule "xsheep-puzzles"]
+	path = xsheep-puzzles
+	url = https://github.com/x-sheep/puzzles-unreleased.git
