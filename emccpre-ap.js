@@ -380,6 +380,7 @@ function initPuzzle() {
             return;
 
         onscreen_canvas.setPointerCapture(event.pointerId)
+        onscreen_canvas.focus()
 
         var xy = canvas_mouse_coords(event, onscreen_canvas);
 
@@ -531,9 +532,9 @@ function initPuzzle() {
     };
 
     // 'number' is used for C pointers
-    var get_save_file = Module.cwrap('get_save_file', 'number', []);
-    var free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
-    var load_game = Module.cwrap('load_game', 'void', []);
+    get_save_file = Module.cwrap('get_save_file', 'number', []);
+    free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
+    load_game = Module.cwrap('load_game', 'void', []);
 
     if (save_button) save_button.onclick = function(event) {
         if (dlg_dimmer === null) {
