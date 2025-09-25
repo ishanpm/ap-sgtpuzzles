@@ -103,6 +103,11 @@ struct midend {
     void *game_id_change_notify_ctx;
 
     bool one_key_shortcuts;
+
+    /* Allow New/Solve to be invoked from keyboard shortcuts. */
+    bool new_game_allowed;
+    bool solve_game_allowed;
+    bool undo_allowed;
 };
 
 #define ensure(me) do { \
@@ -240,6 +245,9 @@ midend *midend_new(frontend *fe, const game *ourgame,
     me->be_prefs.size = me->be_prefs.len = 0;
 
     me->one_key_shortcuts = true;
+    me->new_game_allowed = true;
+    me->solve_game_allowed = true;
+    me->undo_allowed = true;
 
     midend_reset_tilesize(me);
 
@@ -991,14 +999,14 @@ static int midend_really_process_key(midend *me, int x, int y, int button)
     }
 
     if (movestr == NULL || movestr == MOVE_UNUSED) {
-	if ((me->one_key_shortcuts && (button == 'n' || button == 'N')) ||
-             button == '\x0E' || button == UI_NEWGAME) {
+	if (me->new_game_allowed && ((me->one_key_shortcuts && (button == 'n' || button == 'N')) ||
+             button == '\x0E') || button == UI_NEWGAME) {
 	    midend_new_game(me);
 	    midend_redraw(me);
             ret = PKR_SOME_EFFECT;
 	    goto done;		       /* never animate */
-	} else if ((me->one_key_shortcuts && (button=='u' || button=='U')) ||
-                   button == '*' || button == '\x1A' || button == '\x1F' ||
+	} else if (me->undo_allowed && ((me->one_key_shortcuts && (button=='u' || button=='U')) ||
+                   button == '*' || button == '\x1A' || button == '\x1F') ||
                    button == UI_UNDO) {
 	    midend_stop_anim(me);
 	    type = me->states[me->statepos-1].movetype;
@@ -1013,7 +1021,7 @@ static int midend_really_process_key(midend *me, int x, int y, int button)
 	    if (!midend_redo(me))
 		goto done;
             ret = PKR_SOME_EFFECT;
-	} else if ((button == '\x13' || button == UI_SOLVE) &&
+	} else if (((me->solve_game_allowed && button == '\x13') || button == UI_SOLVE) &&
                    me->ourgame->can_solve) {
             ret = PKR_SOME_EFFECT;
 	    if (midend_solve(me))
@@ -3208,4 +3216,16 @@ static const char *midend_deserialise_prefs(
     free_cfg(cfg);
     sfree(buf->data);
     return errmsg;
+}
+
+void midend_set_new_game_allowed(midend *me, bool new_game_allowed) {
+    me->new_game_allowed = new_game_allowed;
+}
+
+void midend_set_solve_game_allowed(midend *me, bool solve_game_allowed) {
+    me->solve_game_allowed = solve_game_allowed;
+}
+
+void midend_set_undo_allowed(midend *me, bool undo_allowed) {
+    me->undo_allowed = undo_allowed;
 }

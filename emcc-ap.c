@@ -129,6 +129,7 @@ void dlg_return_ival(int index, int val);
 void resize_puzzle(int w, int h);
 void restore_puzzle_size(int w, int h);
 void rescale_puzzle(void);
+void set_allowed_shortcuts(bool new_game_allowed, bool solve_game_allowed, bool undo_allowed);
 
 /*
  * Internal forward references.
@@ -951,6 +952,14 @@ void prefs_load_callback(midend *me, const char *prefs)
     ctx.pos = 0;
 
     midend_load_prefs(me, prefs_read, &ctx);
+}
+
+void set_allowed_shortcuts(bool new_game_allowed, bool solve_game_allowed, bool undo_allowed)
+{
+    midend_set_new_game_allowed(me, new_game_allowed);
+    midend_set_solve_game_allowed(me, solve_game_allowed);
+    midend_set_undo_allowed(me, undo_allowed);
+
 }
 
 /* ----------------------------------------------------------------------

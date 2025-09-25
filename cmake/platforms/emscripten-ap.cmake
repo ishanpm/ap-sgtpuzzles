@@ -55,6 +55,8 @@ set(emcc_export_list
   _rescale_puzzle
   # Callback for loading user preferences
   _prefs_load_callback
+  # Callback for disabling keyboard shortcuts
+  _set_allowed_shortcuts
   # Functions for allocating and freeing C memory
   _malloc
   _free

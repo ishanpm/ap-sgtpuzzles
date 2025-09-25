@@ -365,6 +365,9 @@ bool midend_get_cursor_location(midend *me, int *x, int *y, int *w, int *h);
 /* Printing functions supplied by the mid-end */
 const char *midend_print_puzzle(midend *me, document *doc, bool with_soln);
 int midend_tilesize(midend *me);
+void midend_set_new_game_allowed(midend *me, bool new_game_allowed);
+void midend_set_solve_game_allowed(midend *me, bool solve_game_allowed);
+void midend_set_undo_allowed(midend *me, bool undo_allowed);
 
 /*
  * malloc.c
