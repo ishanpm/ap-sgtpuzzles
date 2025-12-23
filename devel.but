@@ -1149,6 +1149,12 @@ the \c{button} parameter:
 the key. They only apply to the cursor keys and the ASCII horizontal
 tab character \cw{\\t}, not to mouse buttons or anything else.
 
+\dt \cw{MOD_STYLUS}
+
+\dd This indicates that the button event came from a stylus or touch
+device, rather than a mouse. This applies to all mouse events, but
+only if the \cw{STYLUS_SUPPORT} flag is set.
+
 \dt \cw{MOD_NUM_KEYPAD}
 
 \dd This applies to some ASCII values, and indicates that the key
@@ -1902,6 +1908,12 @@ an emulated number pad to appear on the screen. Similarly to
 \cw{REQUIRE_RBUTTON}, a puzzle need not specify this simply if its
 use of the number keys is not critical.
 
+\dt \cw{STYLUS_SUPPORT}
+
+\dd This flag indicates that the puzzle may handle stylus or touch
+events differently from mouse events. The \cw{MOD_STYLUS} modifier
+will be set appropriately on each button event.
+
 \H{backend-initiative} Things a back end may do on its own initiative
 
 This section describes a couple of things that a back end may choose
@@ -1966,6 +1978,24 @@ I should stress again that this function is a horrid hack. Nobody
 should use it if they're not Mines; if you think you need to use it,
 think again repeatedly in the hope of finding a better way to do
 whatever it was you needed to do.
+
+\S{backend-set-public-desc} \cw{set_public_desc()}
+
+\c void (*set_public_desc)(game_state *state, const char *pubdesc);
+
+If a puzzle has used \cw{midend_supersede_game_desc()}
+(\k{backend-supersede}) to set a separate public and private game
+description, then when the game is saved and reloaded, the private
+description is the one used to reconstruct the initial \c{game_state}
+in the reloaded game. If the backend wants to know the public
+description as well, it can fill in this function pointer, and then
+this function will be called immediately after \cw{new_game()}
+(\k{backend-new-game}), on the same \c{game_state}, during a reload.
+
+Nobody who is not calling \cw{midend_supersede_game_desc()} should
+fill this function in at all. Even users of
+\cw{midend_supersede_game_desc()} won't need it if they're not setting
+a separate private and public description, and maybe not even then.
 
 \C{drawing} The drawing API
 

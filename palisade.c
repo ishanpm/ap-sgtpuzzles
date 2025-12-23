@@ -1550,6 +1550,7 @@ const struct game thegame = {
     new_game_desc,
     validate_desc,
     new_game,
+    NULL, /* set_public_desc */
     dup_game,
     free_game,
     true, solve_game,
@@ -1576,5 +1577,5 @@ const struct game thegame = {
     true, false, game_print_size, game_print,
     true,                                     /* wants_statusbar */
     false, NULL,                       /* timing_state */
-    0,                                         /* flags */
+    REQUIRE_RBUTTON,                           /* flags */
 };
