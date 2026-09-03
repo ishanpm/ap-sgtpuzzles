@@ -134,8 +134,19 @@ enum {
   N_PREF_ITEMS
 };
 
+#define MINES_PROPORTION_DENOM 10000
+#define MINES_PROPORTION_PERCENT (MINES_PROPORTION_DENOM / 100)
+
 struct game_params {
-    int w, h, n;
+    int w, h;
+
+    /* The number of mines can be specified either absolutely, or as a
+     * proportion of eligible cells after the first click. If it's a
+     * proportion, it's stored (internally) as the numerator of a
+     * fraction which has denominator MINES_PROPORTION_DENOM. */
+    bool nmines_is_proportion;
+    int nmines;
+
     enum game_type type;
     bool unique;
 
@@ -155,7 +166,8 @@ struct mine_layout {
      * If we haven't yet actually generated the mine layout, here's
      * all the data we will need to do so.
      */
-    int n;             /* nominal mine count, provided they all fit */
+    bool nmines_is_proportion;
+    int nmines;
     bool unique;
     random_state *rs;
     midend *me;		       /* to give back the new game desc */
@@ -169,7 +181,7 @@ struct mine_layout {
 };
 
 struct game_state {
-    int w, h, n;
+    int w, h;
     bool dead, won, used_solve;
     struct mine_layout *layout;	       /* real mine positions */
     struct grid_info *grid;
@@ -846,6 +858,67 @@ static void free_grid_info(struct grid_info *gi)
 }
 
 /* ----------------------------------------------------------------------
+ * Helper functions for parsing percentages in game_params strings
+ */
+
+typedef struct {
+    char buf[32];
+} mines_prop_buf;
+
+static const char *format_mines_proportion(int proportion, mines_prop_buf *pbuf)
+{
+    char *p = pbuf->buf;
+    /* Format as an integer, ensuring enough digits to fill the units
+     * place when it's scaled down to a percentage. */
+    int len = sprintf(p, "%03d", proportion);
+    assert(len > 2);
+    char *pointpos = p + len - 2;
+    char *end = p + len;
+    while (end > pointpos && end[-1] == '0')
+        end--;
+    *end = '\0';
+    if (end > pointpos) {
+        memmove(pointpos+1, pointpos, end + 1 - pointpos);
+        *pointpos = '.';
+    }
+    return p;
+}
+
+static int parse_mines_proportion(const char *p, const char *end)
+{
+    int value = 0;
+    bool seen_point = false;
+    int denom = MINES_PROPORTION_DENOM / 100;
+    while (p < end && *p) {
+        int c = *p++;
+        if (c == '.') {
+            seen_point = true;
+        } else {
+            int digit = c - '0';
+            if (digit < 0 || digit > 9)
+                digit = 0;
+
+            if (denom > 1) {
+                if (value >= MINES_PROPORTION_DENOM/10)
+                    value = MINES_PROPORTION_DENOM; /* saturate */
+                else
+                    value = 10 * value + digit;
+                if (seen_point)
+                    denom /= 10;
+            }
+        }
+    }
+    while (denom > 1) {
+        if (value >= MINES_PROPORTION_DENOM/10)
+            value = MINES_PROPORTION_DENOM; /* saturate */
+        else
+            value = 10 * value;
+        denom /= 10;
+    }
+    return value;
+}
+
+/* ----------------------------------------------------------------------
  * params handling routines and menues
  */
 
@@ -854,7 +927,8 @@ static game_params *default_params(void)
     game_params *ret = snew(game_params);
 
     ret->w = ret->h = 9;
-    ret->n = 10;
+    ret->nmines_is_proportion = false;
+    ret->nmines = 10;
     ret->type = MINES_GRID_SQUARE;
     ret->unique = true;
     ret->first_click_tile = -1;
@@ -863,64 +937,100 @@ static game_params *default_params(void)
 }
 
 static const struct game_params mines_presets_top[] = {
-    {9, 9, 10, MINES_GRID_SQUARE, true, -1},         /* 81 tiles, 12.3% */
-    {9, 9, 35, MINES_GRID_SQUARE, true, -1},         /* 81 tiles, 43.2% */
-    {16, 16, 40, MINES_GRID_SQUARE, true, -1},       /* 256 tiles, 15.6% */
-    {16, 16, 99, MINES_GRID_SQUARE, true, -1},       /* 256 tiles, 38.7% */
+    {9, 9, false, 10, MINES_GRID_SQUARE, true, -1},         /* 81 tiles, 12.3% */
+    {9, 9, false, 35, MINES_GRID_SQUARE, true, -1},         /* 81 tiles, 43.2% */
+    {16, 16, false, 40, MINES_GRID_SQUARE, true, -1},       /* 256 tiles, 15.6% */
+    {16, 16, false, 99, MINES_GRID_SQUARE, true, -1},       /* 256 tiles, 38.7% */
 #ifndef SMALL_SCREEN
-    {30, 16, 99, MINES_GRID_SQUARE, true, -1},       /* 480 tiles, 20.6% */
-    {30, 16, 170, MINES_GRID_SQUARE, true, -1},      /* 480 tiles, 35.4% */
+    {30, 16, false, 99, MINES_GRID_SQUARE, true, -1},       /* 480 tiles, 20.6% */
+    {30, 16, false, 170, MINES_GRID_SQUARE, true, -1},      /* 480 tiles, 35.4% */
 #endif
-    {9, 9, 20, MINES_GRID_SQUARE_CYCLIC, true, -1},  /* 81 tiles, 24.7% */
-    {10, 10, 20, MINES_GRID_HONEYCOMB, true, -1},    /* 100 tiles, 10.0% */
-    {8, 8, 15, MINES_GRID_HONEYCOMB_CYCLIC, true, -1}, /* 64 tiles, 23.4% */
-    {7, 7, 34, MINES_GRID_TRIANGULAR, true, -1},     /* 103 tiles, 33.0% */
+    {9, 9, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SQUARE_CYCLIC, true, -1},
+    {10, 10, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_HONEYCOMB, true, -1},
+    {8, 8, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_HONEYCOMB_CYCLIC, true, -1},
+    {7, 7, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_TRIANGULAR, true, -1},
 #ifndef SMALL_SCREEN
-    {10, 10, 70, MINES_GRID_TRIANGULAR, true, -1},   /* 210 tiles, 33.3% */
+    {10, 10, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_TRIANGULAR, true, -1},
 #endif
-    {5, 6, 10, MINES_GRID_TRIANGULAR_CYCLIC, true, -1}, /* 60 tiles, 33.3% */
+    {5, 6, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_TRIANGULAR_CYCLIC, true, -1},
 };
 
 static const struct game_params mines_presets_more_small[] = {
-    {9, 9, 10, MINES_GRID_OCTAGONAL2, true, -1},     /* 81 tiles, 12.3% */
-    {5, 5, 20, MINES_GRID_SNUBSQUARE, true, -1},     /* 65 tiles, 30.8% */
-    {7, 7, 17, MINES_GRID_CAIRO, true, -1},          /* 84 tiles, 20.2% */
-    {4, 4, 15, MINES_GRID_KITE, true, -1},           /* 96 tiles, 15.6% */
-    {5, 4, 20, MINES_GRID_GREATHEXAGONAL, true, -1}, /* 87 tiles, 23.0% */
-    {5, 4, 15, MINES_GRID_KAGOME, true, -1},         /* 58 tiles, 25.9% */
-    {4, 4, 15, MINES_GRID_FLORET, true, -1},         /* 84 tiles, 17.9% */
+    {9, 9, true, 15*MINES_PROPORTION_PERCENT,
+     MINES_GRID_OCTAGONAL2, true, -1},
+    {5, 5, true, 30*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SNUBSQUARE, true, -1},
+    {7, 7, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_CAIRO, true, -1},
+    {4, 4, true, 15*MINES_PROPORTION_PERCENT,
+     MINES_GRID_KITE, true, -1},
+    {5, 4, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATHEXAGONAL, true, -1},
+    {5, 4, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_KAGOME, true, -1},
+    {4, 4, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_FLORET, true, -1},
 #ifndef SMALL_SCREEN
-    {5, 4, 20, MINES_GRID_GREATDODECAGONAL, true, -1}, /* 87 tiles, 23.0% */
+    {5, 4, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATDODECAGONAL, true, -1},
 #endif
-    {3, 2, 10, MINES_GRID_GREATGREATDODECAGONAL, true, -1}, /* 31 tiles, 32.3% */
-    { 9, 9, 10, MINES_GRID_PENROSE_P3, true, -1},   /* 38--51 tiles, 19.6--26.3% */
-    {10, 10, 15, MINES_GRID_PENROSE_P2, true, -1},   /* 60--64 tiles, 23.4--25.0% */
+    {3, 2, true, 30*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATGREATDODECAGONAL, true, -1},
+    {9, 9, true, 25*MINES_PROPORTION_PERCENT,
+      MINES_GRID_PENROSE_P3, true, -1},
+    {10, 10, true, 25*MINES_PROPORTION_PERCENT,
+     MINES_GRID_PENROSE_P2, true, -1},
 #ifdef SMALL_SCREEN
-    {8, 8, 10, MINES_GRID_HATS, true, -1},           /* 30--36 tiles, 27.8--33.3% */
-    {8, 8, 10, MINES_GRID_SPECTRES, true, -1},       /* 26--31 tiles, 32.3--38.5% */
+    {8, 8, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_HATS, true, -1},
+    {8, 8, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SPECTRES, true, -1},
 #else
-    {10, 10, 20, MINES_GRID_HATS, true, -1},         /* 54--59 tiles, 33.9--37.0% */
-    {10, 10, 15, MINES_GRID_SPECTRES, true, -1},     /* 50--60 tiles, 22.2--26.8% */
+    {10, 10, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_HATS, true, -1},
+    {10, 10, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SPECTRES, true, -1},
 #endif
 };
 
 #ifndef SMALL_SCREEN
 static const struct game_params mines_presets_more_big[] = {
-    {16, 16, 40, MINES_GRID_OCTAGONAL2, true, -1},   /* 256 tiles, 15.6% */
-    {30, 16, 99, MINES_GRID_OCTAGONAL2, true, -1},   /* 480 tiles, 20.6% */
-    {30, 16, 150, MINES_GRID_OCTAGONAL2, true, -1},  /* 480 tiles, 31.2% */
-    {7, 7, 40, MINES_GRID_SNUBSQUARE, true, -1},     /* 133 tiles, 30.1% */
-    {9, 9, 30, MINES_GRID_CAIRO, true, -1},          /* 144 tiles, 20.8% */
-    {9, 7, 40, MINES_GRID_KITE, true, -1},           /* 378 tiles, 10.6% */
-    {9, 5, 40, MINES_GRID_GREATHEXAGONAL, true, -1}, /* 217 tiles, 18.4% */
-    {7, 6, 20, MINES_GRID_KAGOME, true, -1},         /* 124 tiles, 16.1% */
-    {5, 5, 20, MINES_GRID_FLORET, true, -1},         /* 132 tiles, 15.2% */
-    {7, 6, 60, MINES_GRID_GREATDODECAGONAL, true, -1}, /* 203 tiles, 29.6% */
-    {5, 3, 20, MINES_GRID_GREATGREATDODECAGONAL, true, -1}, /* 109 tiles, 18.3% */
-    {16, 16, 30, MINES_GRID_PENROSE_P3, true, -1},   /* 158--174 tiles, 17.2--19.0% */
-    {16, 16, 30, MINES_GRID_PENROSE_P2, true, -1},   /* 176--190 tiles, 15.8--17.0% */
-    {16, 16, 60, MINES_GRID_HATS, true, -1},         /* 159--167 tiles, 35.9--37.7% */
-    {16, 16, 50, MINES_GRID_SPECTRES, true, -1},     /* 150--160 tiles, 31.2--33.3% */
+    {16, 16, true, 15*MINES_PROPORTION_PERCENT,
+     MINES_GRID_OCTAGONAL2, true, -1},
+    {30, 16, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_OCTAGONAL2, true, -1},
+    {30, 16, true, 30*MINES_PROPORTION_PERCENT,
+     MINES_GRID_OCTAGONAL2, true, -1},
+    {7, 7, true, 30*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SNUBSQUARE, true, -1},
+    {9, 9, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_CAIRO, true, -1},
+    {9, 7, true, 10*MINES_PROPORTION_PERCENT,
+     MINES_GRID_KITE, true, -1},
+    {9, 5, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATHEXAGONAL, true, -1},
+    {7, 6, true, 15*MINES_PROPORTION_PERCENT,
+     MINES_GRID_KAGOME, true, -1},
+    {5, 5, true, 15*MINES_PROPORTION_PERCENT,
+     MINES_GRID_FLORET, true, -1},
+    {7, 6, true, 30*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATDODECAGONAL, true, -1},
+    {5, 3, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_GREATGREATDODECAGONAL, true, -1},
+    {16, 16, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_PENROSE_P3, true, -1},
+    {16, 16, true, 20*MINES_PROPORTION_PERCENT,
+     MINES_GRID_PENROSE_P2, true, -1},
+    {16, 16, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_HATS, true, -1},
+    {16, 16, true, 35*MINES_PROPORTION_PERCENT,
+     MINES_GRID_SPECTRES, true, -1},
 };
 #endif
 
@@ -941,8 +1051,16 @@ static void preset_menu_add_preset_with_title(struct preset_menu *menu,
     char buf[80];
     game_params *dup_params;
 
-    sprintf(buf, "%dx%d, %d mines, %s",
-            params->w, params->h, params->n, gridnames[params->type]);
+    if (params->nmines_is_proportion) {
+        mines_prop_buf pbuf;
+        sprintf(buf, "%dx%d, %s%% mines, %s",
+                params->w, params->h,
+                format_mines_proportion(params->nmines, &pbuf),
+                gridnames[params->type]);
+    } else {
+        sprintf(buf, "%dx%d, %d mines, %s",
+                params->w, params->h, params->nmines, gridnames[params->type]);
+    }
 
     dup_params = snew(game_params);
     *dup_params = *params;
@@ -1016,12 +1134,18 @@ static void decode_params(game_params *params, char const *string)
     }
     if (*p == 'n') {
 	p++;
-	params->n = atoi(p);
+	params->nmines_is_proportion = false;
+	params->nmines = atoi(p);
 	while (*p && (*p == '.' || isdigit((unsigned char)*p))) p++;
+    } else if (*p == 'p') {
+	const char *q = ++p;
+	while (*p && (*p == '.' || isdigit((unsigned char)*p))) p++;
+	params->nmines_is_proportion = true;
+	params->nmines = parse_mines_proportion(q, p);
     } else {
-        if (params->h > 0 && params->w > 0 &&
-            params->w <= INT_MAX / params->h)
-            params->n = params->w * params->h / 10;
+        /* Fall back to 10% mines */
+        params->nmines_is_proportion = true;
+        params->nmines = MINES_PROPORTION_DENOM / 10;
     }
 
     while (*p) {
@@ -1060,8 +1184,15 @@ static char *encode_params(const game_params *params, bool full)
      * Mine count is a generation-time parameter, since it can be
      * deduced from the mine bitmap!
      */
-    if (full)
-	len += sprintf(ret+len, "n%d", params->n);
+    if (full) {
+        if (params->nmines_is_proportion) {
+            mines_prop_buf pbuf;
+            len += sprintf(ret+len, "p%s",
+                           format_mines_proportion(params->nmines, &pbuf));
+        } else {
+            len += sprintf(ret+len, "n%d", params->nmines);
+        }
+    }
     if (full && !params->unique)
         ret[len++] = 'a';
     if (full && params->first_click_tile >= 0) {
@@ -1099,7 +1230,12 @@ static config_item *game_configure(const game_params *params)
 
     ret[2].name = "Mines";
     ret[2].type = C_STRING;
-    sprintf(buf, "%d", params->n);
+    if (params->nmines_is_proportion) {
+        mines_prop_buf pbuf;
+        sprintf(buf, "%s%%", format_mines_proportion(params->nmines, &pbuf));
+    } else {
+        sprintf(buf, "%d", params->nmines);
+    }
     ret[2].u.string.sval = dupstr(buf);
 
     ret[3].name = "Grid type";
@@ -1123,9 +1259,14 @@ static game_params *custom_params(const config_item *cfg)
 
     ret->w = atoi(cfg[0].u.string.sval);
     ret->h = atoi(cfg[1].u.string.sval);
-    ret->n = atoi(cfg[2].u.string.sval);
-    if (strchr(cfg[2].u.string.sval, '%'))
-	ret->n = ret->n * (ret->w * ret->h) / 100;
+    const char *percent = strchr(cfg[2].u.string.sval, '%');
+    if (percent) {
+        ret->nmines_is_proportion = true;
+        ret->nmines = parse_mines_proportion(cfg[2].u.string.sval, percent);
+    } else {
+        ret->nmines_is_proportion = false;
+        ret->nmines = atoi(cfg[2].u.string.sval);
+    }
     ret->type = cfg[3].u.choices.selected;
     ret->unique = cfg[4].u.boolean.bval;
     ret->first_click_tile = -1;
@@ -1153,10 +1294,19 @@ static const char *validate_params(const game_params *params, bool full)
         return "Width and height must not be negative";
     if (whmin < 1)
         return "Width and height must not be zero";
-    if (params->n < 0)
-	return "Mine count may not be negative";
-    if (params->n < 1)
-        return "Number of mines must be greater than zero";
+    if (params->nmines_is_proportion) {
+        if (params->nmines < 0)
+            return "Mine proportion may not be negative";
+        if (params->nmines == 0)
+            return "Mine proportion may not be zero";
+        if (params->nmines > MINES_PROPORTION_DENOM)
+            return "Mine proportion may not exceed 100%";
+    } else {
+        if (params->nmines < 0)
+            return "Mine count may not be negative";
+        if (params->nmines < 1)
+            return "Number of mines must be greater than zero";
+    }
 
     err = grid_validate_params(grid_types[params->type], params->w, params->h);
     if (err != NULL) return err;
@@ -2995,8 +3145,10 @@ static struct perturbations *mineperturb(void *vctx, signed char *board,
     return ret;
 }
 
-static bool *minegen(struct grid_info *gi, int w, int h, int n_orig, int tile,
-                     bool unique, random_state *rs)
+static bool *minegen(struct grid_info *gi, int w, int h,
+                     bool nmines_is_proportion, int nmines,
+                     int tile, bool unique, random_state *rs,
+                     int *nominal_mines_out)
 {
     bool *ret = snewn(gi->ntiles, bool);
     bool success;
@@ -3026,12 +3178,28 @@ static bool *minegen(struct grid_info *gi, int w, int h, int n_orig, int tile,
                 if (i != tile && !is_neighbour_of(gi, i, tile))
                     tmp[k++] = i;
 
+            /*
+             * Work out how many mines the user has asked for.
+             */
+            if (nmines_is_proportion) {
+                /* Take a proportion of the eligible cells */
+                n = (long)k * nmines / MINES_PROPORTION_DENOM;
+            } else {
+                n = nmines;
+            }
+
+            *nominal_mines_out = n;
+
+            /* Reduce that to fit, if there are too many. */
+            if (n > k)
+                n = k;
+
 	    /*
 	     * Now pick n off the list at random. If we run out of
 	     * places to put mines, reduce nn to the maximum number we
 	     * _can_ place.
 	     */
-	    n = nn = (n_orig < k ? n_orig : k);
+	    nn = n;
 	    while (nn-- > 0) {
 		i = random_upto(rs, k);
 		ret[tmp[i]] = true;
@@ -3183,23 +3351,28 @@ static char *describe_layout(enum game_type type, bool *mines, int area,
     return ret;
 }
 
-static bool *new_mine_layout(struct grid_info *gi, int w, int h, int n,
-                             int tile, bool unique,
-			     random_state *rs, char **game_desc)
+static bool *new_mine_layout(struct grid_info *gi, int w, int h,
+                             bool nmines_is_proportion, int nmines,
+                             int tile, bool unique, random_state *rs,
+                             char **game_desc, int *nominal_mines_out)
 {
 #ifdef TIME_MINELAYOUT
     clock_t before, after;
     before = clock();
 #endif
-    bool *mines = minegen(gi, w, h, n, tile, unique, rs);
+    int nominal_mines;
+    bool *mines = minegen(gi, w, h, nmines_is_proportion, nmines,
+                          tile, unique, rs, &nominal_mines);
+    if (nominal_mines_out)
+        *nominal_mines_out = nominal_mines;
 #ifdef TIME_MINELAYOUT
     after = clock();
     printf("Mine layout time: %ld ms\n", 1000*(after-before)/CLOCKS_PER_SEC);
 #endif
 
     if (game_desc)
-        *game_desc = describe_layout(gi->type, mines, gi->ntiles, w, tile, n,
-                                     true, gi->desc);
+        *game_desc = describe_layout(gi->type, mines, gi->ntiles, w, tile,
+                                     nominal_mines, true, gi->desc);
 
     return mines;
 }
@@ -3323,15 +3496,16 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         if (!gi)
             gi = new_grid(params, grid_desc);
 
-	grid = new_mine_layout(gi, params->w, params->h, params->n,
-			       tile, params->unique, rs, &game_desc);
+	grid = new_mine_layout(gi, params->w, params->h,
+                               params->nmines_is_proportion, params->nmines,
+			       tile, params->unique, rs, &game_desc, NULL);
 
         free_grid_info(gi);  /* we don't bother with refcount here. */
 	sfree(grid);
         sfree(grid_desc);
         return game_desc;
     } else {
-	char *rsdesc, *desc;
+	char *rsdesc, *desc, *p;
         int len;
 	rsdesc = random_state_encode(rs);
         if (grid_desc)
@@ -3339,13 +3513,20 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         else
             len = strlen(rsdesc) + 100;
 	desc = snewn(len, char);
+        p = desc;
         if (grid_desc) {
-            sprintf(desc, "%s%cr%d,%c,%s", grid_desc, GRID_DESC_SEP,
-                    params->n, (char)(params->unique ? 'u' : 'a'), rsdesc);
+            p += sprintf(p, "%s%c", grid_desc, GRID_DESC_SEP);
             sfree(grid_desc);
-        } else {
-            sprintf(desc, "r%d,%c,%s", params->n, (char)(params->unique ? 'u' : 'a'), rsdesc);
         }
+        p += sprintf(p, "r");
+        if (params->nmines_is_proportion) {
+            mines_prop_buf pbuf;
+            p += sprintf(p, "p%s",
+                         format_mines_proportion(params->nmines, &pbuf));
+        } else {
+            p += sprintf(p, "%d", params->nmines);
+        }
+        sprintf(p, ",%c,%s", (char)(params->unique ? 'u' : 'a'), rsdesc);
 	sfree(rsdesc);
         if (gi)
             free_grid_info(gi);  /* we don't bother with refcount here. */
@@ -3401,10 +3582,18 @@ static const char *validate_desc(const game_params *params, const char *desc)
     sfree(grid_desc);
     if (*desc == 'r') {
         desc++;
-	if (!*desc || !isdigit((unsigned char)*desc))
-	    return "No initial mine count in game description";
-	while (*desc && isdigit((unsigned char)*desc))
-	    desc++;		       /* skip over mine count */
+        if (*desc == 'p') {
+            desc++;
+            if (!*desc || !isdigit((unsigned char)*desc))
+                return "No initial mine proportion in game description";
+            while (*desc && (*desc == '.' || isdigit((unsigned char)*desc)))
+                desc++;		       /* skip over mine proportion */
+        } else {
+            if (!*desc || !isdigit((unsigned char)*desc))
+                return "No initial mine count in game description";
+            while (*desc && isdigit((unsigned char)*desc))
+                desc++;		       /* skip over mine count */
+        }
 	if (*desc != ',')
 	    return "No ',' after initial x-coordinate in game description";
 	desc++;
@@ -3496,10 +3685,15 @@ static int open_square(game_state *state, int tile)
 	 * initial click location.
 	 */
 	char *desc, *privdesc, *tmp = NULL;
-	state->layout->mines = new_mine_layout(state->grid, w, h, state->layout->n,
-					       tile, state->layout->unique,
-					       state->layout->rs,
-					       &desc);
+        int nominal_mines;
+	state->layout->mines = new_mine_layout(
+            state->grid, w, h,
+            state->layout->nmines_is_proportion, state->layout->nmines,
+            tile, state->layout->unique, state->layout->rs, &desc,
+            &nominal_mines);
+        /* Rewrite the nominal mine count to be absolute. */
+        state->layout->nmines_is_proportion = false;
+        state->layout->nmines = nominal_mines;
 
         /* Record the first-click location, so that if the user
          * undoes this move they can still remember where it was. */
@@ -3629,7 +3823,6 @@ static game_state *new_game(midend *me, const game_params *params,
 
     state->w = params->w;
     state->h = params->h;
-    state->n = params->n;
     state->dead = state->won = false;
     state->used_solve = false;
 
@@ -3649,9 +3842,18 @@ static game_state *new_game(midend *me, const game_params *params,
 
     if (*desc == 'r') {
 	desc++;
-	state->layout->n = atoi(desc);
-	while (*desc && isdigit((unsigned char)*desc))
-	    desc++;		       /* skip over mine count */
+        if (*desc == 'p') {
+            const char *q = ++desc;
+            while (*desc && (*desc == '.' || isdigit((unsigned char)*desc)))
+                desc++;
+            state->layout->nmines_is_proportion = true;
+            state->layout->nmines = parse_mines_proportion(q, desc);
+        } else {
+            state->layout->nmines_is_proportion = false;
+            state->layout->nmines = atoi(desc);
+            while (*desc && isdigit((unsigned char)*desc))
+                desc++;
+        }
 	if (*desc) desc++;	       /* eat comma */
 	if (*desc == 'a')
 	    state->layout->unique = false;
@@ -3738,19 +3940,20 @@ static game_state *new_game(midend *me, const game_params *params,
 	if (masked)
 	    obfuscate_bitmap(bmp, wh, true);
 
-        state->layout->n = 0;
+        state->layout->nmines_is_proportion = false;
+        state->layout->nmines = 0;
 	memset(state->layout->mines, 0, wh * sizeof(bool));
 	for (i = 0; i < wh; i++) {
 	    if (bmp[i / 8] & (0x80 >> (i % 8))) {
 		state->layout->mines[i] = true;
-		state->layout->n++;
+		state->layout->nmines++;
             }
 	}
 
         if (*desc == '+') {
             /* The game description indicates some mines were unplaced */
             int unplaced = atoi(desc);
-            state->layout->n += unplaced;
+            state->layout->nmines += unplaced;
         }
 
 	if (tile >= 0)
@@ -3797,7 +4000,6 @@ static game_state *dup_game(const game_state *state)
 
     ret->w = state->w;
     ret->h = state->h;
-    ret->n = state->n;
     ret->dead = state->dead;
     ret->won = state->won;
     ret->used_solve = state->used_solve;
@@ -5290,14 +5492,19 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                 mines++;
         }
 
-        if (!state->layout->mines)
-            mines = state->layout->n;
-
-	if (state->dead) {
+        if (!state->layout->mines) {
+            if (state->layout->nmines_is_proportion) {
+                mines_prop_buf pbuf;
+                sprintf(statusbar, "Marked: 0 / %s%%",
+                        format_mines_proportion(state->layout->nmines, &pbuf));
+            } else {
+                sprintf(statusbar, "Marked: 0 / %d", state->layout->nmines);
+            }
+        } else if (state->dead) {
 	    sprintf(statusbar, "DEAD!");
 	} else if (state->won) {
-            if (mines < state->layout->n) {
-                int extra = state->layout->n - mines;
+            if (mines < state->layout->nmines) {
+                int extra = state->layout->nmines - mines;
                 if (extra == 1)
                     sprintf(statusbar, "1 mine didn't fit!");
                 else
@@ -5537,7 +5744,7 @@ int main(int argc, char **argv)
 
     printf("%s:%s\n", id, describe_layout(p->type, s->layout->mines,
                                           ntiles,
-                                          p->w, tile, s->layout->n,
+                                          p->w, tile, s->layout->nmines,
                                           (*desc != 'm'), grid));
 
     return 0;
