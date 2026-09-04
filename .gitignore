@@ -176,3 +176,4 @@ include/
 /auxiliary/*.exe
 
 build-emscripten/**
+build/**
